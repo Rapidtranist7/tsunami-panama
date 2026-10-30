@@ -24,7 +24,7 @@ const SOURCES = [
 ];
 
 export default function Home() {
-  const [lang, setLang] = useState<Lang>("es");
+  const [lang, setLang] = useState<Lang>("en");
   const [zoneId, setZoneId] = useState<string>(ZONES[0].id);
   const zone = useMemo(() => ZONES.find((z) => z.id === zoneId) ?? ZONES[0], [zoneId]);
   const s = t(lang);
@@ -95,7 +95,7 @@ export default function Home() {
             <Button variant="ghost" size="icon" onClick={refreshAll} aria-label={s.refresh} data-testid="button-refresh">
               <RefreshCw className={`h-4 w-4 ${fetching ? "animate-spin" : ""}`} />
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setLang((l) => (l === "es" ? "en" : "es"))} data-testid="button-language">
+            <Button variant="outline" size="sm" onClick={() => setLang((l) => { const n = l === "es" ? "en" : "es"; document.documentElement.lang = n; return n; })} data-testid="button-language">
               <Languages className="mr-1.5 h-4 w-4" /> {s.language}
             </Button>
           </div>

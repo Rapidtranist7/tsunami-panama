@@ -4,6 +4,8 @@ import type { Zone } from "@shared/schema";
 export const ZONES: Zone[] = [
   { id: "panama-city", name: "Ciudad de Panamá", province: "Panamá", coast: "pacific", lat: 8.9824, lon: -79.5199, nearestDart: "32411" },
   { id: "pedasi", name: "Pedasí", province: "Los Santos (Azuero)", coast: "pacific", lat: 7.5313, lon: -80.0275, nearestDart: "32411" },
+  { id: "playa-venao", name: "Playa Venao", province: "Los Santos (Azuero)", coast: "pacific", lat: 7.4323, lon: -80.1941, nearestDart: "32411" },
+  { id: "playa-reina", name: "Playa Reina", province: "Veraguas (Mariato)", coast: "pacific", lat: 7.6203, lon: -80.9932, nearestDart: "32411" },
   { id: "santa-catalina", name: "Santa Catalina", province: "Veraguas", coast: "pacific", lat: 7.6333, lon: -81.2667, nearestDart: "32411" },
   { id: "puerto-armuelles", name: "Puerto Armuelles", province: "Chiriquí", coast: "pacific", lat: 8.2779, lon: -82.8608, nearestDart: "32411" },
   { id: "david", name: "David", province: "Chiriquí", coast: "pacific", lat: 8.4333, lon: -82.4333, nearestDart: "32411" },
