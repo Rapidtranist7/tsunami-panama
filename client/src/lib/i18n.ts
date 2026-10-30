@@ -1,0 +1,211 @@
+export type Lang = "es" | "en";
+
+const dict = {
+  es: {
+    appName: "Tsunami Panamá",
+    tagline: "Sismos, estado de amenaza de tsunami y boyas DART de la NOAA",
+    updated: "Actualizado",
+    updating: "Actualizando…",
+    refresh: "Actualizar",
+    zone: "Tu zona costera",
+    zoneHelp: "Elige la costa donde te encuentras",
+    pacific: "Pacífico",
+    caribbean: "Caribe",
+    status: {
+      none: "Sin amenaza de tsunami vigente",
+      advisory: "Precaución: amenaza de tsunami",
+      warning: "Amenaza de tsunami",
+      unknown: "Estado no verificado",
+    },
+    statusDetail: {
+      none: "El Centro de Alerta de Tsunamis del Pacífico (PTWC) no tiene un mensaje de amenaza vigente que nombre a Panamá para esta costa.",
+      advisory: "El PTWC pronostica olas de 0,3 a 1 m sobre el nivel de marea en algunas costas de Panamá. Aléjate de playas, puertos y ríos cercanos al mar.",
+      warning: "El PTWC pronostica olas peligrosas para costas de Panamá. Si estás en la costa, dirígete a zonas altas de inmediato y sigue a SINAPROC.",
+      unknown: "No se pudo verificar el estado oficial. No asumas que es seguro: consulta SINAPROC y tsunami.gov directamente.",
+    },
+    staleThreat: "El último mensaje de amenaza tiene más de 24 h y no se ha recibido un mensaje final. Verifica en tsunami.gov.",
+    nationalAuthority: "SINAPROC determina la alerta oficial para Panamá. Los mensajes del PTWC son orientativos para las autoridades nacionales.",
+    ptwcMessage: "Último mensaje PTWC",
+    ptwcBasin: { pacific: "Cuenca del Pacífico (WEPA40)", caribbean: "Cuenca del Caribe (WECA40)" },
+    issued: "Emitido",
+    bulletin: "Ver boletín oficial",
+    category: "Categoría para Panamá",
+    notNamed: "Panamá no es nombrado en este mensaje",
+    finalMsg: "Mensaje final: la amenaza ha pasado",
+    etas: "Horas estimadas de llegada (PTWC)",
+    nearestEta: "Punto ETA más cercano",
+    lastQuake: "Último sismo",
+    lastQuakeHelp: "Región de Panamá y aguas adyacentes",
+    strongest30: "Mayor sismo (30 días)",
+    magnitude: "Magnitud",
+    depth: "Profundidad",
+    distance: "Distancia a",
+    time: "Hora local",
+    usgsPage: "Ficha USGS",
+    tsunamiFlagged: "USGS marcó este evento para evaluación de tsunami",
+    magnitudeNote: "La magnitud por sí sola no determina el riesgo de tsunami. El estado de amenaza proviene únicamente de mensajes oficiales.",
+    buoys: "Boyas DART de la NOAA",
+    buoysHelp: "Sensores de presión en el fondo marino que detectan tsunamis en mar abierto",
+    buoyReporting: "Reportando",
+    buoyOffline: "Fuera de servicio",
+    buoyUnknown: "Sin datos",
+    eventMode: "MODO EVENTO",
+    standardMode: "Modo estándar",
+    waterColumn: "Altura de columna de agua",
+    lastReading: "Última lectura",
+    dataAge: "hace {n} min",
+    dataAgeH: "hace {h} h {m} min",
+    standardModeNote: "En modo estándar una boya DART transmite cada 6 horas; en modo evento, cada pocos minutos.",
+    nearestBuoy: "Boya más cercana a tu zona",
+    ndbcPage: "Ficha NDBC",
+    recentQuakes: "Sismos recientes",
+    recentQuakesHelp: "USGS · últimos 30 días M4+, últimos 7 días M2.5+ en Panamá",
+    farField: "Sismos lejanos M6.5+ (7 días)",
+    noFarField: "Sin sismos M6.5+ en el mundo en los últimos 7 días.",
+    history: "Historial de mensajes PTWC",
+    historyHelp: "Boletines registrados por este servicio desde tsunami.gov",
+    colTime: "Hora (UTC)",
+    colEvent: "Evento",
+    colMsg: "Mensaje",
+    colPanama: "Panamá",
+    sources: "Fuentes oficiales",
+    disclaimer:
+      "Prototipo informativo. No predice sismos ni sustituye las órdenes de evacuación. Si sientes un sismo fuerte cerca de la costa, no esperes el aviso: aléjate del mar hacia zonas altas.",
+    feedError: "No se pudo contactar la fuente",
+    km: "km",
+    ago: "hace",
+    min: "min",
+    h: "h",
+    d: "d",
+    map: "Mapa",
+    mapLegend: { quake: "Sismo (tamaño = magnitud)", recent: "Últimas 24 h", dart: "Boya DART", zone: "Zona seleccionada" },
+    showAll: "Ver todos",
+    showLess: "Ver menos",
+    loading: "Cargando…",
+    newBulletin: "Nuevo mensaje del PTWC",
+    language: "English",
+  },
+  en: {
+    appName: "Tsunami Panamá",
+    tagline: "Earthquakes, tsunami threat status and NOAA DART buoys",
+    updated: "Updated",
+    updating: "Updating…",
+    refresh: "Refresh",
+    zone: "Your coastal zone",
+    zoneHelp: "Choose the coast where you are",
+    pacific: "Pacific",
+    caribbean: "Caribbean",
+    status: {
+      none: "No tsunami threat in effect",
+      advisory: "Caution: tsunami threat",
+      warning: "Tsunami threat",
+      unknown: "Status not verified",
+    },
+    statusDetail: {
+      none: "The Pacific Tsunami Warning Center (PTWC) has no threat message in effect naming Panama for this coast.",
+      advisory: "PTWC forecasts waves of 0.3 to 1 m above tide level on some coasts of Panama. Stay away from beaches, harbors and tidal rivers.",
+      warning: "PTWC forecasts hazardous waves for coasts of Panama. If you are on the coast, move to high ground now and follow SINAPROC.",
+      unknown: "The official status could not be verified. Do not assume it is safe: check SINAPROC and tsunami.gov directly.",
+    },
+    staleThreat: "The latest threat message is over 24 h old and no final message has been received. Verify on tsunami.gov.",
+    nationalAuthority: "SINAPROC sets the official alert for Panama. PTWC messages are guidance for national authorities.",
+    ptwcMessage: "Latest PTWC message",
+    ptwcBasin: { pacific: "Pacific basin (WEPA40)", caribbean: "Caribbean basin (WECA40)" },
+    issued: "Issued",
+    bulletin: "View official bulletin",
+    category: "Category for Panama",
+    notNamed: "Panama is not named in this message",
+    finalMsg: "Final message: the threat has passed",
+    etas: "Estimated arrival times (PTWC)",
+    nearestEta: "Nearest ETA point",
+    lastQuake: "Latest earthquake",
+    lastQuakeHelp: "Panama region and adjacent waters",
+    strongest30: "Strongest (30 days)",
+    magnitude: "Magnitude",
+    depth: "Depth",
+    distance: "Distance to",
+    time: "Local time",
+    usgsPage: "USGS event page",
+    tsunamiFlagged: "USGS flagged this event for tsunami evaluation",
+    magnitudeNote: "Magnitude alone does not determine tsunami risk. Threat status comes only from official messages.",
+    buoys: "NOAA DART buoys",
+    buoysHelp: "Sea-floor pressure sensors that detect tsunamis in the open ocean",
+    buoyReporting: "Reporting",
+    buoyOffline: "Out of service",
+    buoyUnknown: "No data",
+    eventMode: "EVENT MODE",
+    standardMode: "Standard mode",
+    waterColumn: "Water column height",
+    lastReading: "Last reading",
+    dataAge: "{n} min ago",
+    dataAgeH: "{h} h {m} min ago",
+    standardModeNote: "In standard mode a DART buoy transmits every 6 hours; in event mode, every few minutes.",
+    nearestBuoy: "Nearest buoy to your zone",
+    ndbcPage: "NDBC station page",
+    recentQuakes: "Recent earthquakes",
+    recentQuakesHelp: "USGS · last 30 days M4+, last 7 days M2.5+ in Panama",
+    farField: "Distant M6.5+ earthquakes (7 days)",
+    noFarField: "No M6.5+ earthquakes worldwide in the last 7 days.",
+    history: "PTWC message history",
+    historyHelp: "Bulletins recorded by this service from tsunami.gov",
+    colTime: "Time (UTC)",
+    colEvent: "Event",
+    colMsg: "Message",
+    colPanama: "Panama",
+    sources: "Official sources",
+    disclaimer:
+      "Informational prototype. It does not predict earthquakes or replace evacuation orders. If you feel a strong earthquake near the coast, do not wait for a warning: move away from the sea to high ground.",
+    feedError: "Could not reach the source",
+    km: "km",
+    ago: "ago",
+    min: "min",
+    h: "h",
+    d: "d",
+    map: "Map",
+    mapLegend: { quake: "Earthquake (size = magnitude)", recent: "Last 24 h", dart: "DART buoy", zone: "Selected zone" },
+    showAll: "Show all",
+    showLess: "Show less",
+    loading: "Loading…",
+    newBulletin: "New PTWC message",
+    language: "Español",
+  },
+} as const;
+
+export type Dict = (typeof dict)["es"];
+export function t(lang: Lang): Dict {
+  return dict[lang] as Dict;
+}
+
+export const LOCALE: Record<Lang, string> = { es: "es-PA", en: "en-US" };
+export const PANAMA_TZ = "America/Panama";
+
+export function fmtLocal(ms: number | string, lang: Lang, opts: Intl.DateTimeFormatOptions = {}) {
+  const d = typeof ms === "string" ? new Date(ms) : new Date(ms);
+  return new Intl.DateTimeFormat(LOCALE[lang], {
+    timeZone: PANAMA_TZ,
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    ...opts,
+  }).format(d);
+}
+
+export function fmtUtc(ms: number | string) {
+  const d = typeof ms === "string" ? new Date(ms) : new Date(ms);
+  return d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+}
+
+export function relTime(ms: number | string, lang: Lang, now = Date.now()) {
+  const tms = typeof ms === "string" ? new Date(ms).getTime() : ms;
+  const diff = Math.max(0, now - tms);
+  const m = Math.round(diff / 60000);
+  const s = t(lang);
+  if (m < 1) return lang === "es" ? "ahora" : "now";
+  if (m < 60) return lang === "es" ? `hace ${m} ${s.min}` : `${m} ${s.min} ago`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return lang === "es" ? `hace ${h} ${s.h}` : `${h} ${s.h} ago`;
+  const d = Math.floor(h / 24);
+  return lang === "es" ? `hace ${d} ${s.d}` : `${d} ${s.d} ago`;
+}
