@@ -9,8 +9,8 @@ import type {
   TsunamiResponse,
   ThreatLevel,
   Coast,
-} from "@shared/schema";
-import { storage } from "./storage";
+} from "../shared/schema";
+import { storage } from "./store";
 
 const UA = "TsunamiPanama/0.1 (public-safety prototype; contact via app)";
 

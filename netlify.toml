@@ -1,0 +1,16 @@
+[build]
+  command = "npm run build:client"
+  publish = "dist/public"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Single-page app fallback (API routes are claimed by the function's `path` config first).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

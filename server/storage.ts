@@ -1,8 +1,9 @@
-import { tsunamiMessages } from "@shared/schema";
-import type { TsunamiMessage, InsertTsunamiMessage } from "@shared/schema";
+import { tsunamiMessages } from "../shared/schema";
+import type { TsunamiMessage, InsertTsunamiMessage } from "../shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import { desc, eq } from "drizzle-orm";
+import { setStorage, type IStorage } from "./store";
 
 const sqlite = new Database("data.db");
 sqlite.pragma("journal_mode = WAL");
@@ -28,12 +29,6 @@ sqlite.exec(`CREATE TABLE IF NOT EXISTS tsunami_messages (
 
 export const db = drizzle(sqlite);
 
-export interface IStorage {
-  getMessage(id: string): Promise<TsunamiMessage | undefined>;
-  listMessages(limit: number): Promise<TsunamiMessage[]>;
-  upsertMessage(msg: InsertTsunamiMessage): Promise<TsunamiMessage>;
-}
-
 export class DatabaseStorage implements IStorage {
   async getMessage(id: string) {
     return db.select().from(tsunamiMessages).where(eq(tsunamiMessages.id, id)).get();
@@ -57,3 +52,4 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
+setStorage(storage);

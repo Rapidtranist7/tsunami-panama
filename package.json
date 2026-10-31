@@ -1,5 +1,5 @@
 {
-  "name": "rest-express",
+  "name": "tsunami-panama",
   "version": "1.0.0",
   "license": "MIT",
   "type": "module",
@@ -8,11 +8,15 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "build:client": "vite build",
+    "netlify:dev": "netlify dev"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
     "@jridgewell/trace-mapping": "^0.3.25",
+    "@netlify/blobs": "^10.7.13",
+    "@netlify/functions": "^5.3.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
     "@radix-ui/react-aspect-ratio": "^1.1.3",
