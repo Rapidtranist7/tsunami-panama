@@ -19,7 +19,8 @@ const SOURCES = [
   { name: "NOAA NDBC — DART buoys", url: "https://www.ndbc.noaa.gov/dart.shtml" },
   { name: "USGS Earthquake Hazards Program", url: "https://earthquake.usgs.gov/earthquakes/map/" },
   { name: "SINAPROC Panamá", url: "https://www.sinaproc.gob.pa/" },
-  { name: "Instituto de Geociencias — Universidad de Panamá", url: "https://sismosgeociencias.up.ac.pa/" },
+  { name: "Instituto de Geociencias — Universidad de Panamá (IGC-UP)", url: "https://sismosgeociencias.up.ac.pa/" },
+  { name: "EMSC — Euro-Mediterranean Seismological Centre", url: "https://www.emsc-csem.org/" },
   { name: "SismoLive Panamá", url: "https://sismolive.mupa.gob.pa/" },
 ];
 

@@ -34,13 +34,29 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Prom
 }
 
 /* =====================================================================
- * USGS earthquakes
+ * Earthquakes — three agencies, merged
+ *
+ *  1. IGC-UP  Instituto de Geociencias, Universidad de Panamá. The national
+ *             seismic network. Its public page lists every located event in
+ *             and around Panama for the last ~7 days (typically M2.5+), with
+ *             PRELIMINAR (automatic) / REVISADO (analyst-reviewed) status.
+ *             This is what SINAPROC and Panamanian media quote.
+ *  2. USGS    NEIC global catalog. Reliable, but for Panama it only carries
+ *             roughly M4.5+ (sometimes M4+), so it misses most of the
+ *             aftershock activity the national network records.
+ *  3. EMSC    Euro-Med Seismological Centre. Relays IGC, OVSICORI-UNA and
+ *             UCR (Costa Rica) solutions through a standard FDSN API — used
+ *             as a backup when the IGC page is unreachable and to cover the
+ *             border region.
  * ===================================================================== */
 
 const USGS = "https://earthquake.usgs.gov/fdsnws/event/1/query";
+const EMSC = "https://www.seismicportal.eu/fdsnws/event/1/query";
+const IGC_PAGE = "https://sismosgeociencias.up.ac.pa/";
 
 // Panama and adjacent Pacific / Caribbean waters
 const REGION = { minlatitude: 4.5, maxlatitude: 12, minlongitude: -85.5, maxlongitude: -76 };
+const PANAMA = { minlatitude: 6.5, maxlatitude: 10.5, minlongitude: -84, maxlongitude: -76.5 };
 
 function toEq(f: any): Earthquake {
   const p = f.properties ?? {};
@@ -58,6 +74,8 @@ function toEq(f: any): Earthquake {
     tsunamiFlag: p.tsunami === 1,
     url: p.url,
     status: p.status ?? "automatic",
+    source: "USGS",
+    alsoReportedBy: [],
   };
 }
 
@@ -69,31 +87,219 @@ async function usgsQuery(params: Record<string, string | number>): Promise<Earth
   return (json.features ?? []).map(toEq);
 }
 
+/* ---------- EMSC (FDSN event service, JSON) ---------- */
+
+function emscToEq(f: any): Earthquake {
+  const p = f.properties ?? {};
+  const c = f.geometry?.coordinates ?? [p.lon, p.lat, p.depth];
+  const auth = String(p.auth ?? "EMSC").toUpperCase();
+  const time = Date.parse(p.time);
+  const updated = p.lastupdate ? Date.parse(p.lastupdate) : time;
+  const region = String(p.flynn_region ?? "")
+    .toLowerCase()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  return {
+    id: `emsc-${p.source_id ?? p.unid ?? f.id}`,
+    mag: typeof p.mag === "number" ? p.mag : null,
+    magType: p.magtype ?? null,
+    place: region,
+    time,
+    updated,
+    lon: c[0],
+    lat: c[1],
+    depthKm: typeof p.depth === "number" ? p.depth : typeof c[2] === "number" ? Math.abs(c[2]) : null,
+    tsunamiFlag: false,
+    url: p.source_id ? `https://www.emsc-csem.org/Earthquake_information/earthquake.php?id=${p.source_id}` : "https://www.emsc-csem.org/",
+    status: "automatic",
+    source: `EMSC/${auth}`,
+    alsoReportedBy: [],
+  };
+}
+
+async function emscQuery(params: Record<string, string | number>): Promise<Earthquake[]> {
+  // EMSC uses minlat/maxlat/minlon/maxlon and start/end rather than the USGS spellings.
+  const map: Record<string, string> = { minlatitude: "minlat", maxlatitude: "maxlat", minlongitude: "minlon", maxlongitude: "maxlon", starttime: "start", endtime: "end", minmagnitude: "minmag" };
+  const qs = new URLSearchParams({ format: "json", limit: "1000" });
+  for (const [k, v] of Object.entries(params)) qs.set(map[k] ?? k, String(v));
+  const r = await fetchText(`${EMSC}?${qs}`, 20000);
+  if (r.status === 204) return [];
+  if (!r.ok) throw new Error(`EMSC ${r.status}`);
+  const json = JSON.parse(r.text);
+  return (json.features ?? []).map(emscToEq).filter((e: Earthquake) => Number.isFinite(e.time));
+}
+
+/* ---------- IGC-UP (Instituto de Geociencias, Universidad de Panamá) ---------- */
+
+const PANAMA_UTC_OFFSET_H = 5; // Panama is UTC-5 all year (no DST)
+
+/** "2026-10-31" + "10:50:19AM" (Panama local) -> epoch ms */
+function igcLocalToEpoch(date: string, hms: string): number | null {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim());
+  const t = /^(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i.exec(hms.trim());
+  if (!d || !t) return null;
+  let h = parseInt(t[1], 10) % 12;
+  if (t[4].toUpperCase() === "PM") h += 12;
+  return Date.UTC(+d[1], +d[2] - 1, +d[3], h + PANAMA_UTC_OFFSET_H, +t[2], +t[3]);
+}
+
+const stripTags = (x: string) => x.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+
+/**
+ * Parse the IGC-UP "últimos sismos" table. Each event appears in several
+ * layout variants of the page (desktop table + mobile cards), so rows are
+ * de-duplicated on date+time+position.
+ */
+function parseIgc(html: string): Earthquake[] {
+  const out = new Map<string, Earthquake>();
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = rowRe.exec(html))) {
+    const cells = Array.from(m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)).map((c) => c[1]);
+    if (cells.length < 8) continue;
+    const [estado, fecha, hora, latS, lonS, profS, magS, regionS] = cells.map(stripTags);
+    const lat = parseFloat(latS);
+    const lon = parseFloat(lonS);
+    const time = igcLocalToEpoch(fecha, hora);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || time === null) continue;
+    const depth = parseFloat(profS);
+    const mag = parseFloat(magS);
+    const href = /href="([^"]*ultimosismo\.html[^"]*)"/i.exec(m[1])?.[1];
+    const url = href ? new URL(href.replace(/&amp;/g, "&"), IGC_PAGE).toString() : IGC_PAGE;
+    const key = `${fecha}T${hora}@${lat.toFixed(3)},${lon.toFixed(3)}`;
+    if (out.has(key)) continue;
+    out.set(key, {
+      id: `igc-${fecha}-${hora.replace(/[^0-9]/g, "")}-${lat.toFixed(3)}-${lon.toFixed(3)}`,
+      mag: Number.isFinite(mag) ? mag : null,
+      magType: "M",
+      place: regionS.replace(/^Localizado en\s+/i, ""),
+      time,
+      updated: time,
+      lat,
+      lon,
+      depthKm: Number.isFinite(depth) ? depth : null,
+      tsunamiFlag: false,
+      url,
+      status: /REVISADO/i.test(estado) ? "reviewed" : "automatic",
+      source: "IGC-UP",
+      alsoReportedBy: [],
+    });
+  }
+  return Array.from(out.values());
+}
+
+async function igcQuery(): Promise<Earthquake[]> {
+  const r = await fetchText(IGC_PAGE, 25000);
+  if (!r.ok) throw new Error(`IGC-UP ${r.status}`);
+  const rows = parseIgc(r.text);
+  if (!rows.length) throw new Error("IGC-UP page returned no events (layout changed?)");
+  return rows;
+}
+
+/* ---------- cross-agency merge ---------- */
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Two agencies' solutions describe the same earthquake if origin times are within 45 s and epicentres within 100 km.
+// (Cross-agency differences are normally a few seconds and a few tens of km; aftershocks in a busy
+// sequence are rarely closer than that in both time and space.)
+const SAME_EVENT_SECONDS = 45;
+const SAME_EVENT_KM = 100;
+
+const agencyOf = (e: Earthquake) => e.source.split("/")[0];
+
+/**
+ * Remove repeats inside a single agency's feed: identical ids (the same USGS event
+ * returned by two queries) or the same row rendered twice on the IGC page
+ * (origin time within 2 s and epicentre within 5 km). Reviewed solutions win.
+ */
+function dedupeWithinAgency(rows: Earthquake[]): Earthquake[] {
+  const ordered = [...rows].sort((a, b) => (a.status === "reviewed" ? -1 : 1) - (b.status === "reviewed" ? -1 : 1));
+  const out: Earthquake[] = [];
+  const ids = new Set<string>();
+  for (const e of ordered) {
+    if (ids.has(e.id)) continue;
+    if (out.some((m) => agencyOf(m) === agencyOf(e) && Math.abs(m.time - e.time) <= 2000 && haversineKm(m.lat, m.lon, e.lat, e.lon) <= 5)) continue;
+    ids.add(e.id);
+    out.push(e);
+  }
+  return out;
+}
+
+function describe(e: Earthquake): string {
+  return `${e.source} ${e.mag !== null ? `M${e.mag.toFixed(1)}` : "M?"}${e.magType && e.magType !== "M" ? ` ${e.magType}` : ""}`;
+}
+
+/**
+ * Merge solutions from several agencies. `groups` are in priority order: the
+ * first agency that located an event provides the displayed solution, later
+ * ones are recorded in `alsoReportedBy`. A USGS tsunami flag is preserved
+ * whichever solution wins.
+ */
+function mergeAgencies(groups: Earthquake[][]): Earthquake[] {
+  const merged: Earthquake[] = [];
+  for (const group of groups) {
+    for (const e of dedupeWithinAgency(group)) {
+      // Only match against solutions from *other* agencies: one agency never lists the same quake twice
+      // (after dedupeWithinAgency), so two of its entries close together are two different shocks.
+      const dup = merged.find((m) => agencyOf(m) !== agencyOf(e) && !m.alsoReportedBy.some((x) => x.startsWith(agencyOf(e))) && Math.abs(m.time - e.time) <= SAME_EVENT_SECONDS * 1000 && haversineKm(m.lat, m.lon, e.lat, e.lon) <= SAME_EVENT_KM);
+      if (dup) {
+        if (!dup.alsoReportedBy.includes(describe(e))) dup.alsoReportedBy.push(describe(e));
+        if (e.tsunamiFlag) dup.tsunamiFlag = true;
+        if (e.updated > dup.updated) dup.updated = e.updated;
+      } else {
+        merged.push({ ...e, alsoReportedBy: [...e.alsoReportedBy] });
+      }
+    }
+  }
+  merged.sort((a, b) => b.time - a.time);
+  return merged;
+}
+
+async function settle(name: string, p: Promise<Earthquake[]>): Promise<{ status: { name: string; ok: boolean; count: number; error?: string }; rows: Earthquake[] }> {
+  try {
+    const rows = await p;
+    return { status: { name, ok: true, count: rows.length }, rows };
+  } catch (err: any) {
+    return { status: { name, ok: false, count: 0, error: err?.message ?? String(err) }, rows: [] };
+  }
+}
+
 export async function getEarthquakes(): Promise<EarthquakesResponse> {
   return cached("eq", 60_000, async () => {
     const now = new Date();
     const d30 = new Date(now.getTime() - 30 * 86400_000).toISOString();
     const d7 = new Date(now.getTime() - 7 * 86400_000).toISOString();
-    const out: EarthquakesResponse = { fetchedAt: now.toISOString(), source: USGS, regional: [], farField: [] };
-    try {
-      const [wide, tight, far] = await Promise.all([
-        usgsQuery({ ...REGION, starttime: d30, minmagnitude: 4.0, limit: 500 }),
-        usgsQuery({ minlatitude: 6.5, maxlatitude: 10.5, minlongitude: -84, maxlongitude: -76.5, starttime: d7, minmagnitude: 2.5, limit: 500 }),
-        usgsQuery({ starttime: d7, minmagnitude: 6.5, limit: 100 }),
-      ]);
-      const seen = new Set<string>();
-      const regional: Earthquake[] = [];
-      for (const e of [...wide, ...tight]) {
-        if (seen.has(e.id)) continue;
-        seen.add(e.id);
-        regional.push(e);
-      }
-      regional.sort((a, b) => b.time - a.time);
-      out.regional = regional;
-      out.farField = far.filter((e) => !seen.has(e.id));
-    } catch (err: any) {
-      out.error = err?.message ?? String(err);
-    }
+    const out: EarthquakesResponse = { fetchedAt: now.toISOString(), source: "IGC-UP + USGS + EMSC", feeds: [], regional: [], farField: [] };
+
+    const [igc, usgsWide, usgsTight, usgsFar, emscWide, emscTight] = await Promise.all([
+      settle("IGC-UP", igcQuery()),
+      settle("USGS (region, 30 d, M4+)", usgsQuery({ ...REGION, starttime: d30, minmagnitude: 4.0, limit: 500 })),
+      settle("USGS (Panama, 7 d, M2.5+)", usgsQuery({ ...PANAMA, starttime: d7, minmagnitude: 2.5, limit: 500 })),
+      settle("USGS (world, 7 d, M6.5+)", usgsQuery({ starttime: d7, minmagnitude: 6.5, limit: 100 })),
+      settle("EMSC (region, 30 d, M4+)", emscQuery({ ...REGION, starttime: d30, minmagnitude: 4.0 })),
+      settle("EMSC (Panama, 7 d, all)", emscQuery({ ...PANAMA, starttime: d7 })),
+    ]);
+    out.feeds = [igc.status, usgsWide.status, usgsTight.status, usgsFar.status, emscWide.status, emscTight.status];
+
+    // Drop IGC rows outside the regional box (it also lists teleseisms felt in Panama).
+    const igcRegional = igc.rows.filter((e) => e.lat >= REGION.minlatitude && e.lat <= REGION.maxlatitude && e.lon >= REGION.minlongitude && e.lon <= REGION.maxlongitude);
+
+    out.regional = mergeAgencies([igcRegional, [...usgsWide.rows, ...usgsTight.rows], [...emscWide.rows, ...emscTight.rows]]);
+
+    const regionalKeys = out.regional;
+    out.farField = usgsFar.rows
+      .filter((e) => !regionalKeys.some((m) => Math.abs(m.time - e.time) <= SAME_EVENT_SECONDS * 1000 && haversineKm(m.lat, m.lon, e.lat, e.lon) <= SAME_EVENT_KM))
+      .sort((a, b) => b.time - a.time);
+
+    if (!out.feeds.some((f) => f.ok)) out.error = out.feeds.map((f) => `${f.name}: ${f.error}`).join("; ");
+    else if (!igc.status.ok) out.error = `IGC-UP: ${igc.status.error}`;
     return out;
   });
 }

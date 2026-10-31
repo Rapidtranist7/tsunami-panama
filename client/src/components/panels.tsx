@@ -182,6 +182,14 @@ export function QuakeCard({ title, help, quake, zone, lang, loading, error }: { 
               <span className="label-wrap">{s.distance} {zone.name}</span>
               <span className="num text-foreground">{Math.round(haversineKm(zone.lat, zone.lon, quake.lat, quake.lon))} {s.km}</span>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground" data-testid="text-quake-source">
+              {s.sourceLabel}: <span className="text-foreground">{quake.source}</span> · {quake.status === "reviewed" ? s.reviewed : s.preliminary}
+              {quake.alsoReportedBy.length > 0 && (
+                <>
+                  {" "}· {s.alsoReported} {quake.alsoReportedBy.join(", ")}
+                </>
+              )}
+            </p>
             {quake.tsunamiFlag && (
               <p className="mt-2 inline-flex items-center gap-1 rounded-md status-advisory-soft px-2 py-0.5 text-xs font-medium">
                 <Waves className="h-3.5 w-3.5" /> {s.tsunamiFlagged}
@@ -305,14 +313,15 @@ export function QuakeTable({ quakes, zone, lang, loading }: { quakes: Earthquake
         <span className="num text-xs text-muted-foreground">{quakes.length}</span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-sm">
+        <table className="w-full min-w-[600px] text-sm">
           <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
             <tr>
               <th className="px-4 py-2 font-medium">M</th>
               <th className="px-2 py-2 font-medium">{lang === "es" ? "Lugar" : "Place"}</th>
               <th className="px-2 py-2 font-medium">{s.depth}</th>
               <th className="px-2 py-2 font-medium whitespace-nowrap">{zone.name}</th>
-              <th className="px-4 py-2 font-medium">{s.time}</th>
+              <th className="px-2 py-2 font-medium">{s.time}</th>
+              <th className="px-4 py-2 font-medium">{s.sourceLabel}</th>
             </tr>
           </thead>
           <tbody>
@@ -327,12 +336,20 @@ export function QuakeTable({ quakes, zone, lang, loading }: { quakes: Earthquake
                 </td>
                 <td className="num whitespace-nowrap px-2 py-2 text-muted-foreground">{q.depthKm !== null ? `${q.depthKm.toFixed(0)} km` : "—"}</td>
                 <td className="num whitespace-nowrap px-2 py-2 text-muted-foreground">{Math.round(haversineKm(zone.lat, zone.lon, q.lat, q.lon))} km</td>
-                <td className="num whitespace-nowrap px-4 py-2 text-muted-foreground">{fmtLocal(q.time, lang)}</td>
+                <td className="num whitespace-nowrap px-2 py-2 text-muted-foreground">{fmtLocal(q.time, lang)}</td>
+                <td className="whitespace-nowrap px-4 py-2 text-xs text-muted-foreground" title={q.alsoReportedBy.length ? `${s.alsoReported} ${q.alsoReportedBy.join(", ")}` : undefined}>
+                  {q.source.replace(/^EMSC\//, "")}
+                  {q.status === "reviewed" ? "" : "*"}
+                  {q.alsoReportedBy.length > 0 && <span className="ml-1 rounded bg-muted px-1 text-[10px]">+{q.alsoReportedBy.length}</span>}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <p className="px-4 pb-2 pt-1 text-[11px] text-muted-foreground">
+        {lang === "es" ? "* solución preliminar (automática). +n = número de otras agencias que localizaron el mismo evento." : "* preliminary (automatic) solution. +n = other agencies that located the same event."}
+      </p>
       {quakes.length > 12 && (
         <div className="border-t border-card-border p-2 text-center">
           <Button variant="ghost" size="sm" onClick={() => setAll((a) => !a)} data-testid="button-toggle-quakes">

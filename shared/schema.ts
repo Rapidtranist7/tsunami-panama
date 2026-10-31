@@ -57,13 +57,25 @@ export interface Earthquake {
   depthKm: number | null;
   tsunamiFlag: boolean;
   url: string;
-  status: string;
+  status: string; // "automatic" | "reviewed" (IGC PRELIMINAR / REVISADO map onto these)
+  /** Agency whose solution is shown: "IGC-UP" (Instituto de Geociencias, Universidad de Panamá), "USGS", or "EMSC/<contributor>". */
+  source: string;
+  /** Other agencies that located the same event, with their magnitude, e.g. "USGS M5.2 mww". */
+  alsoReportedBy: string[];
+}
+
+export interface FeedStatus {
+  name: string;
+  ok: boolean;
+  count: number;
+  error?: string;
 }
 
 export interface EarthquakesResponse {
   fetchedAt: string;
   source: string;
-  regional: Earthquake[]; // Panama + adjacent waters, last 30 days
+  feeds: FeedStatus[];
+  regional: Earthquake[]; // Panama + adjacent waters: IGC-UP 7-day national catalog + USGS/EMSC 30-day M4+ regional
   farField: Earthquake[]; // M6.5+ worldwide, last 7 days
   error?: string;
 }

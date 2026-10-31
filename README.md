@@ -3,7 +3,7 @@
 Earthquake, tsunami-threat and NOAA DART buoy monitor for Panama's coasts.
 
 - Official PTWC threat status for the selected coastal zone (Pacific / Caribbean), never inferred from magnitude.
-- Latest and strongest USGS earthquakes, with distance to your zone, on a MapLibre map.
+- Latest and strongest earthquakes from the Panamanian national network (IGC-UP), USGS and EMSC, merged and de-duplicated, with distance to your zone, on a MapLibre map.
 - Live NOAA DART buoy water-column readings (NDBC).
 - Archive of PTWC bulletins naming Panama.
 - English / Spanish.
@@ -15,7 +15,7 @@ The site is a static Vite build plus two Netlify Functions:
 | Piece | Where | Purpose |
 |---|---|---|
 | Static site | `dist/public` (built by `npm run build:client`) | The React app |
-| `netlify/functions/api.ts` | `/api/*` | Proxies and normalises USGS, NDBC and tsunami.gov feeds |
+| `netlify/functions/api.ts` | `/api/*` | Proxies and normalises IGC-UP, USGS, EMSC, NDBC and tsunami.gov feeds |
 | `netlify/functions/poll.ts` | scheduled, every 5 min | Keeps the PTWC archive growing with no visitors |
 | Netlify Blobs store `ptwc-archive` | automatic | Persists the PTWC bulletin archive |
 
@@ -67,10 +67,27 @@ npm run dev        # http://localhost:5000
 
 - NOAA Pacific Tsunami Warning Center — https://www.tsunami.gov/
 - USGS Earthquake Hazards Program — https://earthquake.usgs.gov/earthquakes/feed/v1.0/
+- EMSC / Seismic Portal FDSN event service — https://www.seismicportal.eu/fdsn-wsevent.html
 - NOAA NDBC DART buoys — https://www.ndbc.noaa.gov/dart.shtml
 - SINAPROC Panamá — https://www.sinaproc.gob.pa/
 - Instituto de Geociencias, Universidad de Panamá — https://sismosgeociencias.up.ac.pa/
 - Map tiles © OpenFreeMap, © OpenMapTiles, data © OpenStreetMap contributors
+
+### How the earthquake list is built
+
+USGS only publishes roughly M4.5+ events for Panama, so on its own it misses most of the aftershock activity
+the national network records. The `/api/earthquakes` endpoint therefore combines three agencies:
+
+| Agency | What it contributes | Window |
+|---|---|---|
+| IGC-UP (Instituto de Geociencias, Universidad de Panamá) | The national catalog, parsed from the public "últimos sismos" table, incl. PRELIMINAR / REVISADO status | ~7 days, all magnitudes |
+| USGS NEIC | Global catalog, tsunami flag, event pages | 30 days M4+ (region), 7 days M2.5+ (Panama), 7 days M6.5+ (world) |
+| EMSC | Relays IGC-UP, OVSICORI-UNA and UCR solutions; backup if the IGC page is down | 30 days M4+ (region), 7 days all (Panama) |
+
+Solutions from different agencies are treated as the same earthquake when origin times are within 45 s and
+epicentres within 100 km. Priority is IGC-UP → USGS → EMSC; other agencies' magnitudes are kept in
+`alsoReportedBy`. Magnitudes differ between agencies (e.g. IGC-UP local magnitude vs USGS Mw), which is
+normal. The `feeds` array in the response reports per-source health.
 
 ## Important caveats
 
