@@ -298,7 +298,7 @@ export function DartCard({ station, lang, highlight }: { station: DartStation; l
 /* Tables                                                              */
 /* ------------------------------------------------------------------ */
 
-export function QuakeTable({ quakes, zone, lang, loading }: { quakes: Earthquake[]; zone: Zone; lang: Lang; loading: boolean }) {
+export function QuakeTable({ quakes, zone, lang, loading, rangeLabel }: { quakes: Earthquake[]; zone: Zone; lang: Lang; loading: boolean; rangeLabel?: string }) {
   const s = t(lang);
   const [all, setAll] = useState(false);
   const rows = all ? quakes : quakes.slice(0, 12);
@@ -307,11 +307,15 @@ export function QuakeTable({ quakes, zone, lang, loading }: { quakes: Earthquake
     <Card className="overflow-hidden" data-testid="table-quakes">
       <div className="flex items-start justify-between gap-3 p-4 pb-2">
         <div>
-          <SectionTitle>{s.recentQuakes}</SectionTitle>
+          <SectionTitle>
+            {s.recentQuakes}
+            {rangeLabel ? <span className="ml-1.5 font-normal text-muted-foreground">· {rangeLabel}</span> : null}
+          </SectionTitle>
           <p className="text-xs text-muted-foreground">{s.recentQuakesHelp}</p>
         </div>
         <span className="num text-xs text-muted-foreground">{quakes.length}</span>
       </div>
+      {quakes.length === 0 && <p className="px-4 pb-4 text-sm text-muted-foreground">{s.mapNone}</p>}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[600px] text-sm">
           <thead className="bg-muted/60 text-left text-xs text-muted-foreground">

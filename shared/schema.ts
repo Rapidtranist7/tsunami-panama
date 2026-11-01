@@ -75,7 +75,7 @@ export interface EarthquakesResponse {
   fetchedAt: string;
   source: string;
   feeds: FeedStatus[];
-  regional: Earthquake[]; // Panama + adjacent waters: IGC-UP 7-day national catalog + USGS/EMSC 30-day M4+ regional
+  regional: Earthquake[]; // Panama + adjacent waters: IGC-UP 7-day national catalog, USGS/EMSC 30-day M4+ regional, USGS 1-year M4.5+ regional
   farField: Earthquake[]; // M6.5+ worldwide, last 7 days
   error?: string;
 }

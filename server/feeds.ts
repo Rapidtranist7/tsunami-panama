@@ -278,20 +278,23 @@ export async function getEarthquakes(): Promise<EarthquakesResponse> {
     const d7 = new Date(now.getTime() - 7 * 86400_000).toISOString();
     const out: EarthquakesResponse = { fetchedAt: now.toISOString(), source: "IGC-UP + USGS + EMSC", feeds: [], regional: [], farField: [] };
 
-    const [igc, usgsWide, usgsTight, usgsFar, emscWide, emscTight] = await Promise.all([
+    const d365 = new Date(now.getTime() - 365 * 86400_000).toISOString();
+    const [igc, usgsWide, usgsTight, usgsFar, emscWide, emscTight, usgsYear] = await Promise.all([
       settle("IGC-UP", igcQuery()),
       settle("USGS (region, 30 d, M4+)", usgsQuery({ ...REGION, starttime: d30, minmagnitude: 4.0, limit: 500 })),
       settle("USGS (Panama, 7 d, M2.5+)", usgsQuery({ ...PANAMA, starttime: d7, minmagnitude: 2.5, limit: 500 })),
       settle("USGS (world, 7 d, M6.5+)", usgsQuery({ starttime: d7, minmagnitude: 6.5, limit: 100 })),
       settle("EMSC (region, 30 d, M4+)", emscQuery({ ...REGION, starttime: d30, minmagnitude: 4.0 })),
       settle("EMSC (Panama, 7 d, all)", emscQuery({ ...PANAMA, starttime: d7 })),
+      // One-year context for the map's "1 year" range. Refreshed every 15 min; USGS caches long searches anyway.
+      settle("USGS (region, 1 y, M4.5+)", cached("eq-year", 15 * 60_000, () => usgsQuery({ ...REGION, starttime: d365, endtime: d30, minmagnitude: 4.5, limit: 2000 }))),
     ]);
-    out.feeds = [igc.status, usgsWide.status, usgsTight.status, usgsFar.status, emscWide.status, emscTight.status];
+    out.feeds = [igc.status, usgsWide.status, usgsTight.status, usgsFar.status, emscWide.status, emscTight.status, usgsYear.status];
 
     // Drop IGC rows outside the regional box (it also lists teleseisms felt in Panama).
     const igcRegional = igc.rows.filter((e) => e.lat >= REGION.minlatitude && e.lat <= REGION.maxlatitude && e.lon >= REGION.minlongitude && e.lon <= REGION.maxlongitude);
 
-    out.regional = mergeAgencies([igcRegional, [...usgsWide.rows, ...usgsTight.rows], [...emscWide.rows, ...emscTight.rows]]);
+    out.regional = mergeAgencies([igcRegional, [...usgsWide.rows, ...usgsTight.rows, ...usgsYear.rows], [...emscWide.rows, ...emscTight.rows]]);
 
     const regionalKeys = out.regional;
     out.farField = usgsFar.rows

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { EarthquakesResponse, DartResponse, TsunamiResponse, TsunamiMessage, ThreatLevel } from "@shared/schema";
 import { ZONES } from "@/lib/zones";
 import { t, fmtLocal, type Lang } from "@/lib/i18n";
-import MapView from "@/components/MapView";
+import MapView, { rangeHours, type RangeKey } from "@/components/MapView";
 import { StatusBanner, PtwcCard, QuakeCard, DartCard, QuakeTable, HistoryTable, SectionTitle } from "@/components/panels";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,21 @@ export default function Home() {
 
   const regional = quakes.data?.regional ?? [];
   const latest = regional[0] ?? null;
+  // Map / table time range. 24 h is the default: that is what people check after feeling a shake.
+  const [range, setRange] = useState<RangeKey>(() => {
+    const saved = typeof localStorage !== "undefined" ? localStorage.getItem("tp.range") : null;
+    return saved === "24h" || saved === "72h" || saved === "7d" || saved === "30d" || saved === "1y" ? saved : "24h";
+  });
+  const changeRange = (r: RangeKey) => {
+    setRange(r);
+    try {
+      localStorage.setItem("tp.range", r);
+    } catch {
+      /* private mode */
+    }
+  };
+  const rangeStart = (quakes.dataUpdatedAt || Date.now()) - rangeHours(range) * 3600_000;
+  const inRange = useMemo(() => regional.filter((q) => q.time >= rangeStart), [regional, rangeStart]);
   const strongest = useMemo(() => (regional.length ? [...regional].sort((a, b) => (b.mag ?? 0) - (a.mag ?? 0))[0] : null), [regional]);
   const stations = dart.data?.stations ?? [];
   const coastStations = stations.filter((d) => d.coast === zone.coast);
@@ -140,8 +155,8 @@ export default function Home() {
         {/* Map + key cards */}
         <section className="grid gap-4 lg:grid-cols-5">
           <Card className="overflow-hidden lg:col-span-3" data-testid="card-map">
-            <div className="h-[340px] sm:h-[420px] lg:h-full lg:min-h-[520px]">
-              <MapView quakes={regional} darts={stations} zones={ZONES} selectedZone={zone} lang={lang} />
+            <div className="h-[520px] sm:h-[560px] lg:h-full lg:min-h-[560px]">
+              <MapView quakes={inRange} range={range} onRangeChange={changeRange} darts={stations} zones={ZONES} selectedZone={zone} lang={lang} />
             </div>
           </Card>
           <div className="space-y-4 lg:col-span-2">
@@ -181,7 +196,7 @@ export default function Home() {
 
         {/* Tables */}
         <section className="grid gap-4 lg:grid-cols-2">
-          <QuakeTable quakes={regional} zone={zone} lang={lang} loading={quakes.isLoading} />
+          <QuakeTable quakes={inRange} zone={zone} lang={lang} loading={quakes.isLoading} rangeLabel={s.rangeLabel[range]} />
           <div className="space-y-4">
             <HistoryTable messages={history.data ?? []} lang={lang} loading={history.isLoading} />
             <Card className="p-4" data-testid="card-farfield">

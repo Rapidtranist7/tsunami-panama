@@ -3,7 +3,8 @@
 Earthquake, tsunami-threat and NOAA DART buoy monitor for Panama's coasts.
 
 - Official PTWC threat status for the selected coastal zone (Pacific / Caribbean), never inferred from magnitude.
-- Latest and strongest earthquakes from the Panamanian national network (IGC-UP), USGS and EMSC, merged and de-duplicated, with distance to your zone, on a MapLibre map.
+- Latest and strongest earthquakes from the Panamanian national network (IGC-UP), USGS and EMSC, merged and de-duplicated, with distance to your zone.
+- A MapLibre map that opens on the last 24 hours, with a 24 h / 72 h / 7 days / 30 days / 1 year selector. Dots are sized by magnitude and coloured by age (USGS convention: red past hour, orange past day, yellow past week, pale older); each quake is labelled with magnitude and Panama local time; the newest is ringed. Longer ranges group aftershocks into tap-to-open clusters while M5.5+ events always stay visible. The recent-quakes table follows the same range.
 - Live NOAA DART buoy water-column readings (NDBC).
 - Archive of PTWC bulletins naming Panama.
 - English / Spanish.
