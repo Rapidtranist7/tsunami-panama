@@ -67,7 +67,7 @@ export default function Home() {
   // Map / table time range. 24 h is the default: that is what people check after feeling a shake.
   const [range, setRange] = useState<RangeKey>(() => {
     const saved = typeof localStorage !== "undefined" ? localStorage.getItem("tp.range") : null;
-    return saved === "24h" || saved === "72h" || saved === "7d" || saved === "30d" || saved === "1y" ? saved : "24h";
+    return saved === "latest" || saved === "24h" || saved === "72h" || saved === "7d" || saved === "30d" || saved === "1y" ? saved : "24h";
   });
   const changeRange = (r: RangeKey) => {
     setRange(r);
@@ -78,7 +78,8 @@ export default function Home() {
     }
   };
   const rangeStart = (quakes.dataUpdatedAt || Date.now()) - rangeHours(range) * 3600_000;
-  const inRange = useMemo(() => regional.filter((q) => q.time >= rangeStart), [regional, rangeStart]);
+  // "Latest" shows just the most recent event in the catalog, however old it is.
+  const inRange = useMemo(() => (range === "latest" ? regional.slice(0, 1) : regional.filter((q) => q.time >= rangeStart)), [regional, rangeStart, range]);
   const strongest = useMemo(() => (regional.length ? [...regional].sort((a, b) => (b.mag ?? 0) - (a.mag ?? 0))[0] : null), [regional]);
   const stations = dart.data?.stations ?? [];
   const coastStations = stations.filter((d) => d.coast === zone.coast);

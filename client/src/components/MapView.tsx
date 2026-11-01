@@ -24,7 +24,7 @@ import type { Earthquake, DartStation, Zone } from "@shared/schema";
 import type { Lang } from "@/lib/i18n";
 import { t, fmtLocal, relTime, PANAMA_TZ, LOCALE } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, LocateFixed } from "lucide-react";
 
 const STYLE = "https://tiles.openfreemap.org/styles/positron";
 const PANAMA_BOUNDS: LngLatBoundsLike = [
@@ -36,7 +36,7 @@ const PANAMA_BOUNDS: LngLatBoundsLike = [
 /* Time ranges                                                         */
 /* ------------------------------------------------------------------ */
 
-export type RangeKey = "24h" | "72h" | "7d" | "30d" | "1y";
+export type RangeKey = "latest" | "24h" | "72h" | "7d" | "30d" | "1y";
 export const RANGES: { key: RangeKey; hours: number }[] = [
   { key: "24h", hours: 24 },
   { key: "72h", hours: 72 },
@@ -44,7 +44,8 @@ export const RANGES: { key: RangeKey; hours: number }[] = [
   { key: "30d", hours: 24 * 30 },
   { key: "1y", hours: 24 * 365 },
 ];
-export const rangeHours = (k: RangeKey) => RANGES.find((r) => r.key === k)?.hours ?? 24;
+// "latest" is not a time window: the page passes just the most recent event, whatever its age.
+export const rangeHours = (k: RangeKey) => (k === "latest" ? 24 * 365 : (RANGES.find((r) => r.key === k)?.hours ?? 24));
 
 // Age colours follow the USGS "Latest Earthquakes" convention: red = past hour,
 // orange = past day, yellow = past week, pale = older. Readers already know it.
@@ -73,6 +74,11 @@ interface Props {
 function labelFor(q: Earthquake, range: RangeKey, lang: Lang, now: number): string {
   const mag = q.mag !== null ? `M${q.mag.toFixed(1)}` : "M?";
   const d = new Date(q.time);
+  if (range === "latest") {
+    // "M3.7 · 1 nov 02:55"
+    const dt = new Intl.DateTimeFormat(LOCALE[lang], { timeZone: PANAMA_TZ, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+    return `${mag} · ${dt}`;
+  }
   if (range === "24h") {
     // Within a day the clock time is the most useful cue: "M3.5 · 14:51"
     const hm = new Intl.DateTimeFormat(LOCALE[lang], { timeZone: PANAMA_TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
@@ -96,7 +102,7 @@ function quakeFC(quakes: Earthquake[], range: RangeKey, lang: Lang, now: number)
   const newestId = quakes.reduce<Earthquake | null>((a, q) => (a === null || q.time > a.time ? q : a), null)?.id;
   // For longer ranges only the larger events get a label; the rest stay as dots. MapLibre hides
   // colliding labels automatically, and sortKey makes the big ones win.
-  const labelMin = range === "24h" ? -Infinity : range === "72h" ? 3.0 : range === "7d" ? 4.0 : range === "30d" ? 4.5 : 5.0;
+  const labelMin = range === "24h" || range === "latest" ? -Infinity : range === "72h" ? 3.0 : range === "7d" ? 4.0 : range === "30d" ? 4.5 : 5.0;
   const isLabelled = (q: Earthquake) => (q.mag ?? 0) >= labelMin || q.id === newestId;
   return {
     type: "FeatureCollection" as const,
@@ -151,6 +157,18 @@ function zoneFC(zones: Zone[], selected: string) {
 // Significant quakes are never swallowed by a cluster: they stay as individual, labelled circles.
 const MAJOR_MAG = 5.5;
 
+function quakeHtml(p: { mag: number; time: number; place: string; depth: number | null; source: string }, l: Lang): string {
+  const st = t(l);
+  const time = Number(p.time);
+  const depth = Number(p.depth);
+  return `<div style="font-size:13px;line-height:1.35">
+    <div style="font-size:15px"><b>M ${Number(p.mag).toFixed(1)}</b> <span style="color:#5b6b7a">· ${relTime(time, l)}</span></div>
+    <div>${p.place}</div>
+    <div style="color:#5b6b7a">${fmtLocal(time, l, { year: "numeric" })} (Panamá)${Number.isFinite(depth) ? ` · ${depth.toFixed(0)} km` : ""}</div>
+    <div style="color:#5b6b7a;font-size:11px">${st.sourceLabel}: ${p.source}</div>
+  </div>`;
+}
+
 const AGE_COLOR_EXPR: any = ["step", ["get", "ageH"], AGE_COLORS.hour, 1, AGE_COLORS.day, 24, AGE_COLORS.week, 168, AGE_COLORS.month, 720, AGE_COLORS.older];
 const MAG_RADIUS_EXPR: any = ["interpolate", ["linear"], ["get", "mag"], 2, 4, 3, 6, 4, 9, 5, 13, 6, 18, 7, 25, 8, 32];
 
@@ -162,6 +180,7 @@ export default function MapView({ quakes, range, onRangeChange, darts, zones, se
   const s = t(lang);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
   const [ready, setReady] = useState(false);
   const [wide, setWide] = useState(false);
   const [legendOpen, setLegendOpen] = useState<boolean>(() => (typeof window === "undefined" ? true : window.innerWidth >= 640));
@@ -318,23 +337,13 @@ export default function MapView({ quakes, range, onRangeChange, darts, zones, se
         });
 
         const popup = new maplibregl.Popup({ closeButton: false, maxWidth: "280px" });
+        popupRef.current = popup;
         const showQuake = (e: MapLayerMouseEvent) => {
           const f = e.features?.[0];
           if (!f) return;
-          const p = f.properties as any;
-          const l = langRef.current;
-          const st = t(l);
-          const time = Number(p.time);
           popup
             .setLngLat((f.geometry as any).coordinates)
-            .setHTML(
-              `<div style="font-size:13px;line-height:1.35">
-                 <div style="font-size:15px"><b>M ${Number(p.mag).toFixed(1)}</b> <span style="color:#5b6b7a">· ${relTime(time, l)}</span></div>
-                 <div>${p.place}</div>
-                 <div style="color:#5b6b7a">${fmtLocal(time, l, { year: "numeric" })} (Panamá) · ${Number.isFinite(Number(p.depth)) ? Number(p.depth).toFixed(0) + " km" : ""}</div>
-                 <div style="color:#5b6b7a;font-size:11px">${st.sourceLabel}: ${p.source}</div>
-               </div>`,
-            )
+            .setHTML(quakeHtml(f.properties as any, langRef.current))
             .addTo(map);
         };
         map.on("click", "quakes-circle", showQuake);
@@ -395,6 +404,19 @@ export default function MapView({ quakes, range, onRangeChange, darts, zones, se
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || wide || !quakes.length) return;
+    if (range === "latest") {
+      const q = newest!;
+      const key = `latest:${q.id}:${lang}`;
+      if (fittedRef.current === key) return;
+      fittedRef.current = key;
+      map.flyTo({ center: [q.lon, q.lat], zoom: Math.max(map.getZoom(), 8.3), duration: 900 });
+      popupRef.current
+        ?.setLngLat([q.lon, q.lat])
+        .setHTML(quakeHtml({ mag: q.mag ?? 0, time: q.time, place: q.place, depth: q.depthKm, source: q.source }, lang))
+        .addTo(map);
+      return;
+    }
+    popupRef.current?.remove();
     const key = `${range}:${selectedZone.id}`;
     if (fittedRef.current === key) return;
     fittedRef.current = key;
@@ -405,7 +427,7 @@ export default function MapView({ quakes, range, onRangeChange, darts, zones, se
     b.extend([selectedZone.lon, selectedZone.lat]);
     const small = map.getContainer().clientWidth < 640;
     map.fitBounds(b, { padding: small ? { top: 40, bottom: 56, left: 48, right: 48 } : { top: 56, bottom: 150, left: 60, right: 60 }, maxZoom: 9, duration: 700 });
-  }, [quakes, range, ready, wide, selectedZone]);
+  }, [quakes, range, ready, wide, selectedZone, newest, lang]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -435,11 +457,13 @@ export default function MapView({ quakes, range, onRangeChange, darts, zones, se
 
   const hours = rangeHours(range);
   const legendRows: { color: string; label: string }[] = [];
-  legendRows.push({ color: AGE_COLORS.hour, label: s.mapAge.hour });
-  legendRows.push({ color: AGE_COLORS.day, label: s.mapAge.day });
-  if (hours > 24) legendRows.push({ color: AGE_COLORS.week, label: s.mapAge.week });
-  if (hours > 168) legendRows.push({ color: AGE_COLORS.month, label: s.mapAge.month });
-  if (hours > 720) legendRows.push({ color: AGE_COLORS.older, label: s.mapAge.older });
+  if (range !== "latest") {
+    legendRows.push({ color: AGE_COLORS.hour, label: s.mapAge.hour });
+    legendRows.push({ color: AGE_COLORS.day, label: s.mapAge.day });
+    if (hours > 24) legendRows.push({ color: AGE_COLORS.week, label: s.mapAge.week });
+    if (hours > 168) legendRows.push({ color: AGE_COLORS.month, label: s.mapAge.month });
+    if (hours > 720) legendRows.push({ color: AGE_COLORS.older, label: s.mapAge.older });
+  }
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -452,10 +476,25 @@ export default function MapView({ quakes, range, onRangeChange, darts, zones, se
           <div className="num text-xs text-muted-foreground" data-testid="text-map-summary">
             {quakes.length === 0
               ? s.mapNone
-              : `${quakes.length} ${quakes.length === 1 ? s.mapQuakeOne : s.mapQuakeMany} · ${s.mapNewest} ${newest ? relTime(newest.time, lang) : "—"}${strongest && quakes.length > 1 ? ` · ${s.mapStrongest} M${strongest.mag?.toFixed(1)}` : ""}`}
+              : range === "latest" && newest
+                ? `M${newest.mag?.toFixed(1)} · ${newest.place} · ${relTime(newest.time, lang)}`
+                : `${quakes.length} ${quakes.length === 1 ? s.mapQuakeOne : s.mapQuakeMany} · ${s.mapNewest} ${newest ? relTime(newest.time, lang) : "—"}${strongest && quakes.length > 1 ? ` · ${s.mapStrongest} M${strongest.mag?.toFixed(1)}` : ""}`}
           </div>
         </div>
         <div className="inline-flex rounded-md border border-card-border bg-muted/40 p-0.5" role="tablist" aria-label={s.mapRange} data-testid="map-range">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={range === "latest"}
+            onClick={() => onRangeChange("latest")}
+            title={s.mapLatestHint}
+            className={`inline-flex items-center gap-1 whitespace-nowrap rounded px-2 py-1 text-xs font-medium transition-colors sm:px-2.5 ${range === "latest" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            data-testid="button-range-latest"
+          >
+            <LocateFixed className="h-3.5 w-3.5 shrink-0" />
+            {s.ranges.latest}
+          </button>
+          <span className="mx-0.5 my-1 w-px bg-card-border" aria-hidden="true" />
           {RANGES.map((r) => (
             <button
               key={r.key}
@@ -463,10 +502,11 @@ export default function MapView({ quakes, range, onRangeChange, darts, zones, se
               role="tab"
               aria-selected={range === r.key}
               onClick={() => onRangeChange(r.key)}
-              className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${range === r.key ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              className={`whitespace-nowrap rounded px-2 py-1 text-xs font-medium transition-colors sm:px-2.5 ${range === r.key ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               data-testid={`button-range-${r.key}`}
             >
-              {s.ranges[r.key]}
+              <span className="sm:hidden">{s.rangesShort[r.key]}</span>
+              <span className="hidden sm:inline">{s.ranges[r.key]}</span>
             </button>
           ))}
         </div>
@@ -499,7 +539,7 @@ export default function MapView({ quakes, range, onRangeChange, darts, zones, se
           ) : (
           <div className="pointer-events-auto rounded-md border border-card-border bg-card/95 px-2.5 py-2 text-xs leading-5 text-muted-foreground backdrop-blur-xs" data-testid="map-legend">
             <div className="mb-0.5 flex items-center justify-between gap-3 font-medium text-foreground">
-              {s.mapLegend.age}
+              {range === "latest" ? s.mapLegend.show : s.mapLegend.age}
               <button type="button" onClick={() => setLegendOpen(false)} className="text-[11px] font-normal text-muted-foreground hover:text-foreground sm:hidden" data-testid="button-legend-close">
                 {s.mapLegend.hide}
               </button>
